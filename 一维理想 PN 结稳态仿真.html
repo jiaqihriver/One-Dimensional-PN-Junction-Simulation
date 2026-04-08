@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>一维理想PN结稳态仿真 | 耗尽近似 & 物理模型</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', 'Roboto', 'Noto Sans', system-ui, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #eef2f5;
+            color: #1a2a3a;
+        }
+        .header {
+            background: linear-gradient(135deg, #0b2b3b, #1c4e6e);
+            color: white;
+            padding: 18px 24px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            margin: 0;
+            font-weight: 500;
+            font-size: 1.8rem;
+            letter-spacing: -0.5px;
+        }
+        .header p {
+            margin: 6px 0 0;
+            opacity: 0.85;
+            font-size: 0.9rem;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            max-width: 1600px;
+            margin: 24px auto;
+            padding: 0 20px;
+            gap: 24px;
+        }
+        .controls {
+            flex: 0 0 320px;
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 22px 20px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 20px;
+            height: fit-content;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        .control-group {
+            margin-bottom: 28px;
+        }
+        .control-group label {
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+            color: #1e4663;
+        }
+        .control-group .param-name {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .control-group .param-unit {
+            font-weight: normal;
+            font-size: 0.75rem;
+            color: #5f7f9e;
+        }
+        .control-group input {
+            width: 100%;
+            cursor: pointer;
+            accent-color: #2c7da0;
+            margin: 8px 0 5px;
+        }
+        .value-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-top: 6px;
+            font-size: 0.85rem;
+            background: #f0f4f9;
+            padding: 6px 12px;
+            border-radius: 28px;
+        }
+        .value-label {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+        .value-display {
+            font-family: 'JetBrains Mono', 'SF Mono', monospace;
+            font-weight: 700;
+            color: #c44536;
+            background: white;
+            padding: 2px 10px;
+            border-radius: 20px;
+            letter-spacing: 0.3px;
+            font-size: 0.9rem;
+        }
+        .info-panel {
+            background: #eef3fc;
+            border-radius: 18px;
+            padding: 16px;
+            margin-top: 20px;
+            font-size: 0.85rem;
+            border-left: 4px solid #2c7da0;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+        }
+        .info-panel strong {
+            color: #0f4c5f;
+        }
+        .badge {
+            font-size: 0.7rem;
+            background: #cbdde9;
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 20px;
+            margin-top: 10px;
+        }
+        .charts {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        .chart-card {
+            background: white;
+            border-radius: 20px;
+            padding: 12px 15px 8px 15px;
+            box-shadow: 0 8px 18px rgba(0,0,0,0.05);
+            transition: all 0.2s;
+            border: 1px solid #e9edf2;
+            width: 100%;
+            height: 460px;
+        }
+        .chart-card:hover {
+            box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+        }
+        .chart-card .plotly-graph-div {
+            height: 100% !important;
+            width: 100% !important;
+        }
+        @media (max-width: 800px) {
+            .container {
+                flex-direction: column;
+            }
+            .controls {
+                position: static;
+                width: 100%;
+            }
+            .chart-card {
+                height: 420px;
+            }
+        }
+        footer {
+            text-align: center;
+            font-size: 0.75rem;
+            padding: 20px;
+            color: #5f7f9e;
+            border-top: 1px solid #dce5ec;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>⚡ 一维理想 PN 结稳态仿真</h1>
+    <p>耗尽近似 | 能带弯曲 | 载流子分布 | 理想 I-V 特性</p>
+</div>
+
+<div class="container">
+    <div class="controls">
+        <h3 style="margin-top:0; font-weight:500; margin-bottom:20px;">📐 器件参数调节</h3>
+        
+        <!-- P区掺杂浓度 -->
+        <div class="control-group">
+            <label>
+                <span class="param-name">🔵 P区掺杂浓度 N<sub>a</sub></span>
+                <span class="param-unit">(cm⁻³)</span>
+            </label>
+            <input type="range" id="Na_slider" min="13" max="18" step="0.05" value="16">
+            <div class="value-row">
+                <span class="value-label">当前值</span>
+                <span class="value-display" id="Na_val">1.00e+16</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 4px; font-size:0.7rem; color:#5f7f9e;">
+                <span>1e13</span><span>1e18</span>
+            </div>
+        </div>
+        
+        <!-- N区掺杂浓度 -->
+        <div class="control-group">
+            <label>
+                <span class="param-name">🟠 N区掺杂浓度 N<sub>d</sub></span>
+                <span class="param-unit">(cm⁻³)</span>
+            </label>
+            <input type="range" id="Nd_slider" min="13" max="18" step="0.05" value="16">
+            <div class="value-row">
+                <span class="value-label">当前值</span>
+                <span class="value-display" id="Nd_val">1.00e+16</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 4px; font-size:0.7rem; color:#5f7f9e;">
+                <span>1e13</span><span>1e18</span>
+            </div>
+        </div>
+        
+        <!-- 外加偏压 -->
+        <div class="control-group">
+            <label>
+                <span class="param-name">🔌 外加偏压 V<sub>a</sub></span>
+                <span class="param-unit">(V)</span>
+            </label>
+            <input type="range" id="Va_slider" min="-2.0" max="0.85" step="0.01" value="0">
+            <div class="value-row">
+                <span class="value-label">当前值</span>
+                <span class="value-display" id="Va_val">0.000 V</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 4px; font-size:0.7rem; color:#5f7f9e;">
+                <span>反向 -2V</span><span>正向 0.85V</span>
+            </div>
+        </div>
+
+        <div class="info-panel" id="stats_panel">
+            <strong>📊 稳态特性</strong><br>
+            计算中...
+        </div>
+        <div class="badge">✔ 理想突变结 | T = 300K | 硅材料</div>
+    </div>
+
+    <div class="charts">
+        <div class="chart-card" id="plot_band"></div>
+        <div class="chart-card" id="plot_potential"></div>
+        <div class="chart-card" id="plot_efield"></div>
+        <div class="chart-card" id="plot_carrier"></div>
+        <div class="chart-card" id="plot_iv"></div>
+    </div>
+</div>
+<footer>基于耗尽近似和准费米能级模型 | 载流子浓度在中性区满足电中性，耗尽区由玻尔兹曼统计描述</footer>
+
+<script>
+    // ---------- 物理常数 (硅, 300K, CGS单位制) ----------
+    const q = 1.602e-19;            // 电子电荷 (C)
+    const eps0 = 8.854e-14;         // 真空介电常数 (F/cm)
+    const eps_r = 11.7;             // 硅相对介电常数
+    const eps = eps0 * eps_r;       // 硅介电常数 (F/cm)
+    const ni = 1.5e10;              // 本征载流子浓度 (cm⁻³)
+    const kT_eV = 0.02585;          // 热电压 kT/q (eV)
+    const Eg = 1.12;                // 禁带宽度 (eV)
+    
+    const I0_base = 5e-15;          // 基础饱和电流 (A)
+    
+    // DOM 元素
+    const NaSlider = document.getElementById('Na_slider');
+    const NdSlider = document.getElementById('Nd_slider');
+    const VaSlider = document.getElementById('Va_slider');
+    const NaValSpan = document.getElementById('Na_val');
+    const NdValSpan = document.getElementById('Nd_val');
+    const VaValSpan = document.getElementById('Va_val');
+    const statsPanel = document.getElementById('stats_panel');
+    
+    function safeExp(x, limit = 80) {
+        if (x > limit) return Math.exp(limit);
+        if (x < -limit) return Math.exp(-limit);
+        return Math.exp(x);
+    }
+    
+    function updateSimulation() {
+        // 读取滑块值
+        let Na_exp = parseFloat(NaSlider.value);
+        let Nd_exp = parseFloat(NdSlider.value);
+        let Va = parseFloat(VaSlider.value);
+        
+        const Na = Math.pow(10, Na_exp);
+        const Nd = Math.pow(10, Nd_exp);
+        
+        // 更新数值显示 (格式: 科学计数法保留两位小数，电压三位小数)
+        NaValSpan.innerText = Na.toExponential(2);
+        NdValSpan.innerText = Nd.toExponential(2);
+        VaValSpan.innerText = Va.toFixed(3) + " V";
+        
+        // 内建电势
+        let Vbi = kT_eV * Math.log((Na * Nd) / (ni * ni));
+        if (Vbi < 0.01) Vbi = 0.01;
+        
+        let Va_eff = Va;
+        let clampWarning = false;
+        if (Va >= Vbi) {
+            Va_eff = Vbi - 0.005;
+            clampWarning = true;
+        }
+        if (Va_eff < -2.0) Va_eff = -2.0;
+        
+        // 耗尽层宽度
+        let W = Math.sqrt((2 * eps / q) * (1/Na + 1/Nd) * (Vbi - Va_eff));
+        let xn = W * Na / (Na + Nd);
+        let xp = W * Nd / (Na + Nd);
+        
+        // 坐标范围
+        let displayMargin = Math.max(W * 2.2, 4e-6);
+        let x_left = -xp - displayMargin * 0.8;
+        let x_right = xn + displayMargin * 0.8;
+        if (x_left > -1e-7) x_left = -2e-5;
+        if (x_right < 1e-7) x_right = 2e-5;
+        
+        const Npoints = 600;
+        let x_cm = [];
+        for (let i = 0; i <= Npoints; i++) {
+            x_cm.push(x_left + (x_right - x_left) * i / Npoints);
+        }
+        
+        let x_um = x_cm.map(x => x * 1e4);
+        let V_arr = new Array(Npoints+1);
+        let E_arr = new Array(Npoints+1);
+        let Ei_arr = new Array(Npoints+1);
+        let Ec_arr = new Array(Npoints+1);
+        let Ev_arr = new Array(Npoints+1);
+        let n_arr = new Array(Npoints+1);
+        let p_arr = new Array(Npoints+1);
+        
+        const Ei_P_ref = kT_eV * Math.log(Na / ni);
+        const Efp_const = 0.0;
+        const Efn_const = -Va_eff;
+        
+        for (let idx = 0; idx <= Npoints; idx++) {
+            let x = x_cm[idx];
+            let v, e;
+            if (x < -xp) {
+                v = 0;
+                e = 0;
+            } else if (x <= 0) {
+                v = (q * Na / (2 * eps)) * Math.pow(x + xp, 2);
+                e = -(q * Na / eps) * (x + xp);
+            } else if (x <= xn) {
+                v = Vbi - Va_eff - (q * Nd / (2 * eps)) * Math.pow(xn - x, 2);
+                e = -(q * Nd / eps) * (xn - x);
+            } else {
+                v = Vbi - Va_eff;
+                e = 0;
+            }
+            V_arr[idx] = v;
+            E_arr[idx] = e;
+            
+            let Ei_local = Ei_P_ref - v;
+            Ei_arr[idx] = Ei_local;
+            Ec_arr[idx] = Ei_local + Eg / 2;
+            Ev_arr[idx] = Ei_local - Eg / 2;
+            
+            let n_val, p_val;
+            if (x < -xp) {
+                p_val = Na;
+                let n_boundary = (ni * ni / Na) * safeExp(Va_eff / kT_eV);
+                n_val = Math.max(n_boundary, 1e0);
+            } else if (x > xn) {
+                n_val = Nd;
+                let p_boundary = (ni * ni / Nd) * safeExp(Va_eff / kT_eV);
+                p_val = Math.max(p_boundary, 1e0);
+            } else {
+                let exp_n = safeExp((Efn_const - Ei_local) / kT_eV);
+                let exp_p = safeExp((Ei_local - Efp_const) / kT_eV);
+                n_val = ni * exp_n;
+                p_val = ni * exp_p;
+                n_val = Math.min(Math.max(n_val, 1e0), 1e20);
+                p_val = Math.min(Math.max(p_val, 1e0), 1e20);
+            }
+            n_arr[idx] = n_val;
+            p_arr[idx] = p_val;
+        }
+        
+        let W_um = W * 1e4;
+        let xp_um = xp * 1e4;
+        let xn_um = xn * 1e4;
+        let currentOp = I0_base * (safeExp(Va_eff / kT_eV) - 1);
+        let maxEField = E_arr.reduce((max, val) => Math.max(max, Math.abs(val)), 0);
+        
+        let warningMsg = clampWarning ? '<span style="color:#c0392b;">⚠️ 正向偏压超过内建电势，已限制为Vbi-5mV</span><br>' : '';
+        statsPanel.innerHTML = `
+            ${warningMsg}
+            <strong>📌 实时结果</strong><br>
+            ▪ 内建电势 V<sub>bi</sub> = ${Vbi.toFixed(4)} V<br>
+            ▪ 耗尽区总宽度 W = ${W_um.toFixed(4)} μm<br>
+            ▪ P区耗尽层宽 x<sub>p</sub> = ${xp_um.toFixed(4)} μm &nbsp;| N区耗尽层宽 x<sub>n</sub> = ${xn_um.toFixed(4)} μm<br>
+            ▪ 最大电场 |E<sub>max</sub>| ≈ ${maxEField.toExponential(3)} V/cm<br>
+            ▪ 理想电流 I<sub>D</sub> = ${currentOp.toExponential(3)} A
+        `;
+        
+        const shapes_common = [
+            { type: 'line', x0: -xp_um, x1: -xp_um, y0: 0, y1: 1, yref: 'paper', line: { color: '#2c7da0', width: 1.5, dash: 'dash' } },
+            { type: 'line', x0: xn_um, x1: xn_um, y0: 0, y1: 1, yref: 'paper', line: { color: '#2c7da0', width: 1.5, dash: 'dash' } },
+            { type: 'line', x0: 0, x1: 0, y0: 0, y1: 1, yref: 'paper', line: { color: '#888888', width: 1, dash: 'dot' } }
+        ];
+        
+        const layout_base = {
+            margin: { t: 50, b: 50, l: 65, r: 35 },
+            xaxis: { title: '位置 x (μm)', zeroline: true, gridcolor: '#e2e8f0', showline: true },
+            shapes: shapes_common,
+            hovermode: 'closest',
+            font: { family: 'Segoe UI, system-ui', size: 12 },
+            plot_bgcolor: '#fdfdfd',
+            paper_bgcolor: '#ffffff'
+        };
+        
+        // 能带图
+        Plotly.react('plot_band', [
+            { x: x_um, y: Ec_arr, name: '导带 Ec', line: { color: '#1f77b4', width: 2.5 }, type: 'scatter' },
+            { x: x_um, y: Ev_arr, name: '价带 Ev', line: { color: '#d62728', width: 2.5 }, type: 'scatter' },
+            { x: x_um, y: Ei_arr, name: '本征能级 Ei', line: { color: '#2ca02c', width: 1.8, dash: 'dot' }, type: 'scatter' },
+            { x: x_um, y: Array(x_um.length).fill(Efp_const), name: 'E<sub>fp</sub> (空穴)', line: { color: '#000000', width: 1.5, dash: 'dash' }, type: 'scatter' },
+            { x: x_um, y: Array(x_um.length).fill(Efn_const), name: 'E<sub>fn</sub> (电子)', line: { color: '#9467bd', width: 1.5, dash: 'dash' }, type: 'scatter' }
+        ], Object.assign({}, layout_base, { title: '📈 能带图 (Ec, Ev, Ei, 准费米能级)', yaxis: { title: '能量 (eV)' } }), { responsive: true });
+        
+        // 电势
+        Plotly.react('plot_potential', [
+            { x: x_um, y: V_arr, name: '静电势 ψ(x)', fill: 'tozeroy', line: { color: '#8e44ad', width: 2.5 }, type: 'scatter' }
+        ], Object.assign({}, layout_base, { title: '⚡ 电势分布', yaxis: { title: '电势 (V)' } }), { responsive: true });
+        
+        // 电场
+        Plotly.react('plot_efield', [
+            { x: x_um, y: E_arr, name: '电场强度 E(x)', fill: 'tozeroy', line: { color: '#e67e22', width: 2.5 }, type: 'scatter' }
+        ], Object.assign({}, layout_base, { title: '🔋 电场分布', yaxis: { title: '电场 (V/cm)' } }), { responsive: true });
+        
+        // 载流子浓度
+        Plotly.react('plot_carrier', [
+            { x: x_um, y: n_arr, name: '电子浓度 n(x)', line: { color: '#1e88e5', width: 2.5 }, type: 'scatter' },
+            { x: x_um, y: p_arr, name: '空穴浓度 p(x)', line: { color: '#e53935', width: 2.5 }, type: 'scatter' }
+        ], Object.assign({}, layout_base, { title: '📊 载流子浓度分布 (对数坐标)', yaxis: { title: '浓度 (cm⁻³)', type: 'log', exponentformat: 'e', dtick: 2 } }), { responsive: true });
+        
+        // I-V 曲线
+        let iv_voltages = [];
+        let iv_currents = [];
+        const maxIvVoltage = Math.min(0.85, Vbi - 0.008);
+        for (let v = -2.0; v <= maxIvVoltage; v += 0.02) {
+            let v_lim = (v >= Vbi) ? Vbi - 0.005 : v;
+            let current = I0_base * (safeExp(v_lim / kT_eV) - 1);
+            iv_voltages.push(v);
+            iv_currents.push(current);
+        }
+        let current_op = I0_base * (safeExp(Va_eff / kT_eV) - 1);
+        
+        Plotly.react('plot_iv', [
+            { x: iv_voltages, y: iv_currents, name: '理想二极管电流', line: { color: '#2c3e50', width: 2.5 }, type: 'scatter' },
+            { x: [Va_eff], y: [current_op], name: '当前工作点', mode: 'markers', marker: { color: '#d62728', size: 12, symbol: 'circle' }, type: 'scatter' }
+        ], {
+            margin: { t: 50, b: 50, l: 65, r: 35 },
+            title: '📉 理想二极管 I-V 特性 (Shockley方程)',
+            xaxis: { title: '外加偏压 V<sub>a</sub> (V)', zeroline: true, gridcolor: '#e2e8f0' },
+            yaxis: { title: '电流 I (A)', type: 'linear', exponentformat: 'e', zeroline: true },
+            hovermode: 'closest',
+            plot_bgcolor: '#fdfdfd'
+        }, { responsive: true });
+    }
+    
+    let debounceTimer;
+    function handleUpdate() {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => updateSimulation(), 8);
+    }
+    
+    NaSlider.addEventListener('input', handleUpdate);
+    NdSlider.addEventListener('input', handleUpdate);
+    VaSlider.addEventListener('input', handleUpdate);
+    window.addEventListener('resize', () => setTimeout(() => updateSimulation(), 100));
+    
+    updateSimulation();
+</script>
+</body>
+</html>
