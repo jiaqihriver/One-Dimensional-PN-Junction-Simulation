@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>一维理想PN结稳态仿真 | 耗尽近似 & 物理模型</title>
+    <title>一维理想PN结稳态仿真 | 耗尽近似 & 准费米能级模型 (修正载流子分布)</title>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
         * {
@@ -172,8 +172,8 @@
 </head>
 <body>
 <div class="header">
-    <h1>⚡ 一维理想 PN 结稳态仿真</h1>
-    <p>耗尽近似 | 能带弯曲 | 载流子分布 | 理想 I-V 特性</p>
+    <h1>⚡ 一维理想 PN 结稳态仿真 (修正模型)</h1>
+    <p>耗尽近似 | 准费米能级恒定模型 | 玻尔兹曼载流子统计 | 连续平滑分布</p>
 </div>
 
 <div class="container">
@@ -232,7 +232,7 @@
             <strong>📊 稳态特性</strong><br>
             计算中...
         </div>
-        <div class="badge">✔ 理想突变结 | T = 300K | 硅材料</div>
+        <div class="badge">✔ 理想突变结 | T = 300K | 硅材料 | 准费米能级恒定模型 (Efp=0, Efn=Va_eff)</div>
     </div>
 
     <div class="charts">
@@ -243,7 +243,7 @@
         <div class="chart-card" id="plot_iv"></div>
     </div>
 </div>
-<footer>基于耗尽近似和准费米能级模型 | 载流子浓度在中性区满足电中性，耗尽区由玻尔兹曼统计描述</footer>
+<footer>基于耗尽近似和全局准费米能级模型 (Efp恒定0，Efn = Va_eff) | 载流子浓度全空间由玻尔兹曼统计连续给出，中性区自动满足电中性，耗尽区平滑过渡</footer>
 
 <script>
     // ---------- 物理常数 (硅, 300K, CGS单位制) ----------
@@ -266,6 +266,7 @@
     const VaValSpan = document.getElementById('Va_val');
     const statsPanel = document.getElementById('stats_panel');
     
+    // 安全指数函数，避免溢出
     function safeExp(x, limit = 80) {
         if (x > limit) return Math.exp(limit);
         if (x < -limit) return Math.exp(-limit);
@@ -281,29 +282,30 @@
         const Na = Math.pow(10, Na_exp);
         const Nd = Math.pow(10, Nd_exp);
         
-        // 更新数值显示 (格式: 科学计数法保留两位小数，电压三位小数)
+        // 更新数值显示
         NaValSpan.innerText = Na.toExponential(2);
         NdValSpan.innerText = Nd.toExponential(2);
         VaValSpan.innerText = Va.toFixed(3) + " V";
         
-        // 内建电势
+        // 内建电势 (V)
         let Vbi = kT_eV * Math.log((Na * Nd) / (ni * ni));
         if (Vbi < 0.01) Vbi = 0.01;
         
+        // 有效偏压: 限制最大正向偏压不超过内建电势-微小量，保证耗尽层宽度为正
         let Va_eff = Va;
         let clampWarning = false;
-        if (Va >= Vbi) {
+        if (Va >= Vbi - 0.005) {
             Va_eff = Vbi - 0.005;
             clampWarning = true;
         }
-        if (Va_eff < -2.0) Va_eff = -2.0;
+        if (Va_eff < -2.0) Va_eff = -2.0;  // 反向偏压下限保护
         
-        // 耗尽层宽度
+        // 耗尽层宽度 (cm)
         let W = Math.sqrt((2 * eps / q) * (1/Na + 1/Nd) * (Vbi - Va_eff));
-        let xn = W * Na / (Na + Nd);
-        let xp = W * Nd / (Na + Nd);
+        let xn = W * Na / (Na + Nd);   // N侧耗尽宽度
+        let xp = W * Nd / (Na + Nd);   // P侧耗尽宽度
         
-        // 坐标范围
+        // 坐标范围 (适当扩展显示中性区)
         let displayMargin = Math.max(W * 2.2, 4e-6);
         let x_left = -xp - displayMargin * 0.8;
         let x_right = xn + displayMargin * 0.8;
@@ -325,13 +327,19 @@
         let n_arr = new Array(Npoints+1);
         let p_arr = new Array(Npoints+1);
         
+        // 参考能级: 在P区中性区 (x < -xp) 设 Ei = kT * ln(Na/ni) = Ei_P_ref
         const Ei_P_ref = kT_eV * Math.log(Na / ni);
-        const Efp_const = 0.0;
-        const Efn_const = -Va_eff;
         
+        // 准费米能级 (单位 eV): 根据PN结理论，在稳态小注入下，准费米能级在各自中性区平坦，
+        // 耗尽区内可近似为恒定，得到连续且正确的载流子浓度分布
+        const Efp = 0.0;                     // 空穴准费米能级 (参考P区中性区)
+        const Efn = Va_eff;                  // 电子准费米能级 (单位 eV，正向偏压时Efn > Efp)
+        
+        // 逐点计算静电势、电场、本征能级及载流子浓度
         for (let idx = 0; idx <= Npoints; idx++) {
             let x = x_cm[idx];
             let v, e;
+            // 耗尽近似下的电势和电场 (经典分段函数)
             if (x < -xp) {
                 v = 0;
                 e = 0;
@@ -348,32 +356,28 @@
             V_arr[idx] = v;
             E_arr[idx] = e;
             
+            // 本征能级 Ei = Ei_P_ref - 静电势 (使得在P区中性区Ei = Ei_P_ref)
             let Ei_local = Ei_P_ref - v;
             Ei_arr[idx] = Ei_local;
             Ec_arr[idx] = Ei_local + Eg / 2;
             Ev_arr[idx] = Ei_local - Eg / 2;
             
-            let n_val, p_val;
-            if (x < -xp) {
-                p_val = Na;
-                let n_boundary = (ni * ni / Na) * safeExp(Va_eff / kT_eV);
-                n_val = Math.max(n_boundary, 1e0);
-            } else if (x > xn) {
-                n_val = Nd;
-                let p_boundary = (ni * ni / Nd) * safeExp(Va_eff / kT_eV);
-                p_val = Math.max(p_boundary, 1e0);
-            } else {
-                let exp_n = safeExp((Efn_const - Ei_local) / kT_eV);
-                let exp_p = safeExp((Ei_local - Efp_const) / kT_eV);
-                n_val = ni * exp_n;
-                p_val = ni * exp_p;
-                n_val = Math.min(Math.max(n_val, 1e0), 1e20);
-                p_val = Math.min(Math.max(p_val, 1e0), 1e20);
-            }
+            // ========== 核心修正: 基于准费米能级的载流子浓度 (全空间连续玻尔兹曼统计) ==========
+            // 电子浓度 n = ni * exp((Efn - Ei)/kT)
+            // 空穴浓度 p = ni * exp((Ei - Efp)/kT)
+            // 此表达式在全空间有效，自动满足中性区电中性，耗尽区内平滑衰减，少子注入自然体现
+            let n_val = ni * safeExp((Efn - Ei_local) / kT_eV);
+            let p_val = ni * safeExp((Ei_local - Efp) / kT_eV);
+            
+            // 数值稳定性裁剪 (避免极端值导致图表溢出)
+            n_val = Math.min(Math.max(n_val, 1e0), 1e20);
+            p_val = Math.min(Math.max(p_val, 1e0), 1e20);
+            
             n_arr[idx] = n_val;
             p_arr[idx] = p_val;
         }
         
+        // 物理量单位转换及显示
         let W_um = W * 1e4;
         let xp_um = xp * 1e4;
         let xn_um = xn * 1e4;
@@ -383,14 +387,16 @@
         let warningMsg = clampWarning ? '<span style="color:#c0392b;">⚠️ 正向偏压超过内建电势，已限制为Vbi-5mV</span><br>' : '';
         statsPanel.innerHTML = `
             ${warningMsg}
-            <strong>📌 实时结果</strong><br>
+            <strong>📌 实时结果 (准费米能级模型)</strong><br>
             ▪ 内建电势 V<sub>bi</sub> = ${Vbi.toFixed(4)} V<br>
             ▪ 耗尽区总宽度 W = ${W_um.toFixed(4)} μm<br>
             ▪ P区耗尽层宽 x<sub>p</sub> = ${xp_um.toFixed(4)} μm &nbsp;| N区耗尽层宽 x<sub>n</sub> = ${xn_um.toFixed(4)} μm<br>
             ▪ 最大电场 |E<sub>max</sub>| ≈ ${maxEField.toExponential(3)} V/cm<br>
-            ▪ 理想电流 I<sub>D</sub> = ${currentOp.toExponential(3)} A
+            ▪ 理想电流 I<sub>D</sub> = ${currentOp.toExponential(3)} A<br>
+            ▪ 准费米能级: E<sub>fp</sub> = 0 eV, E<sub>fn</sub> = ${Va_eff.toFixed(4)} eV
         `;
         
+        // 公共图形设置 (垂直虚线标记耗尽区边界和冶金结)
         const shapes_common = [
             { type: 'line', x0: -xp_um, x1: -xp_um, y0: 0, y1: 1, yref: 'paper', line: { color: '#2c7da0', width: 1.5, dash: 'dash' } },
             { type: 'line', x0: xn_um, x1: xn_um, y0: 0, y1: 1, yref: 'paper', line: { color: '#2c7da0', width: 1.5, dash: 'dash' } },
@@ -407,32 +413,44 @@
             paper_bgcolor: '#ffffff'
         };
         
-        // 能带图
+        // 1. 能带图 (Ec, Ev, Ei, 准费米能级)
         Plotly.react('plot_band', [
-            { x: x_um, y: Ec_arr, name: '导带 Ec', line: { color: '#1f77b4', width: 2.5 }, type: 'scatter' },
-            { x: x_um, y: Ev_arr, name: '价带 Ev', line: { color: '#d62728', width: 2.5 }, type: 'scatter' },
-            { x: x_um, y: Ei_arr, name: '本征能级 Ei', line: { color: '#2ca02c', width: 1.8, dash: 'dot' }, type: 'scatter' },
-            { x: x_um, y: Array(x_um.length).fill(Efp_const), name: 'E<sub>fp</sub> (空穴)', line: { color: '#000000', width: 1.5, dash: 'dash' }, type: 'scatter' },
-            { x: x_um, y: Array(x_um.length).fill(Efn_const), name: 'E<sub>fn</sub> (电子)', line: { color: '#9467bd', width: 1.5, dash: 'dash' }, type: 'scatter' }
-        ], Object.assign({}, layout_base, { title: '📈 能带图 (Ec, Ev, Ei, 准费米能级)', yaxis: { title: '能量 (eV)' } }), { responsive: true });
+            { x: x_um, y: Ec_arr, name: '导带 E<sub>c</sub>', line: { color: '#1f77b4', width: 2.5 }, type: 'scatter' },
+            { x: x_um, y: Ev_arr, name: '价带 E<sub>v</sub>', line: { color: '#d62728', width: 2.5 }, type: 'scatter' },
+            { x: x_um, y: Ei_arr, name: '本征能级 E<sub>i</sub>', line: { color: '#2ca02c', width: 1.8, dash: 'dot' }, type: 'scatter' },
+            { x: x_um, y: Array(x_um.length).fill(Efp), name: 'E<sub>fp</sub> (空穴准费米能级)', line: { color: '#000000', width: 1.8, dash: 'dash' }, type: 'scatter' },
+            { x: x_um, y: Array(x_um.length).fill(Efn), name: 'E<sub>fn</sub> (电子准费米能级)', line: { color: '#9467bd', width: 1.8, dash: 'dash' }, type: 'scatter' }
+        ], Object.assign({}, layout_base, { 
+            title: '📈 能带图 (Ec, Ev, Ei, 准费米能级) — 连续平滑', 
+            yaxis: { title: '能量 (eV)' } 
+        }), { responsive: true });
         
-        // 电势
+        // 2. 电势分布
         Plotly.react('plot_potential', [
             { x: x_um, y: V_arr, name: '静电势 ψ(x)', fill: 'tozeroy', line: { color: '#8e44ad', width: 2.5 }, type: 'scatter' }
-        ], Object.assign({}, layout_base, { title: '⚡ 电势分布', yaxis: { title: '电势 (V)' } }), { responsive: true });
+        ], Object.assign({}, layout_base, { 
+            title: '⚡ 电势分布', 
+            yaxis: { title: '电势 (V)' } 
+        }), { responsive: true });
         
-        // 电场
+        // 3. 电场分布
         Plotly.react('plot_efield', [
             { x: x_um, y: E_arr, name: '电场强度 E(x)', fill: 'tozeroy', line: { color: '#e67e22', width: 2.5 }, type: 'scatter' }
-        ], Object.assign({}, layout_base, { title: '🔋 电场分布', yaxis: { title: '电场 (V/cm)' } }), { responsive: true });
+        ], Object.assign({}, layout_base, { 
+            title: '🔋 电场分布', 
+            yaxis: { title: '电场 (V/cm)' } 
+        }), { responsive: true });
         
-        // 载流子浓度
+        // 4. 载流子浓度分布 (对数坐标) — 修正后平滑且物理正确
         Plotly.react('plot_carrier', [
             { x: x_um, y: n_arr, name: '电子浓度 n(x)', line: { color: '#1e88e5', width: 2.5 }, type: 'scatter' },
             { x: x_um, y: p_arr, name: '空穴浓度 p(x)', line: { color: '#e53935', width: 2.5 }, type: 'scatter' }
-        ], Object.assign({}, layout_base, { title: '📊 载流子浓度分布 (对数坐标)', yaxis: { title: '浓度 (cm⁻³)', type: 'log', exponentformat: 'e', dtick: 2 } }), { responsive: true });
+        ], Object.assign({}, layout_base, { 
+            title: '📊 载流子浓度分布 (对数坐标) — 准费米能级模型，连续且无突变', 
+            yaxis: { title: '浓度 (cm⁻³)', type: 'log', exponentformat: 'e', dtick: 2, range: [0, 20] } 
+        }), { responsive: true });
         
-        // I-V 曲线
+        // 5. I-V 特性曲线 (肖克莱方程)
         let iv_voltages = [];
         let iv_currents = [];
         const maxIvVoltage = Math.min(0.85, Vbi - 0.008);
@@ -442,33 +460,42 @@
             iv_voltages.push(v);
             iv_currents.push(current);
         }
-        let current_op = I0_base * (safeExp(Va_eff / kT_eV) - 1);
+        let current_op_point = I0_base * (safeExp(Va_eff / kT_eV) - 1);
         
         Plotly.react('plot_iv', [
-            { x: iv_voltages, y: iv_currents, name: '理想二极管电流', line: { color: '#2c3e50', width: 2.5 }, type: 'scatter' },
-            { x: [Va_eff], y: [current_op], name: '当前工作点', mode: 'markers', marker: { color: '#d62728', size: 12, symbol: 'circle' }, type: 'scatter' }
+            { x: iv_voltages, y: iv_currents, name: '理想二极管电流 (Shockley)', line: { color: '#2c3e50', width: 2.5 }, type: 'scatter' },
+            { x: [Va_eff], y: [current_op_point], name: '当前工作点', mode: 'markers', marker: { color: '#d62728', size: 12, symbol: 'circle' }, type: 'scatter' }
         ], {
             margin: { t: 50, b: 50, l: 65, r: 35 },
-            title: '📉 理想二极管 I-V 特性 (Shockley方程)',
+            title: '📉 理想二极管 I-V 特性 (肖克莱方程)',
             xaxis: { title: '外加偏压 V<sub>a</sub> (V)', zeroline: true, gridcolor: '#e2e8f0' },
             yaxis: { title: '电流 I (A)', type: 'linear', exponentformat: 'e', zeroline: true },
             hovermode: 'closest',
-            plot_bgcolor: '#fdfdfd'
+            plot_bgcolor: '#fdfdfd',
+            paper_bgcolor: '#ffffff'
         }, { responsive: true });
     }
     
+    // 防抖更新，提升性能
     let debounceTimer;
     function handleUpdate() {
         if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => updateSimulation(), 8);
+        debounceTimer = setTimeout(() => updateSimulation(), 10);
     }
     
+    // 事件监听
     NaSlider.addEventListener('input', handleUpdate);
     NdSlider.addEventListener('input', handleUpdate);
     VaSlider.addEventListener('input', handleUpdate);
     window.addEventListener('resize', () => setTimeout(() => updateSimulation(), 100));
     
+    // 初始仿真
     updateSimulation();
+    
+    // 补充说明：手动验证载流子分布修正后的自洽性
+    // 本模型采用全局恒定的准费米能级 (Efp, Efn)，结合耗尽近似下的静电势分布，
+    // 计算得到的n(x)和p(x)在全空间连续，且中性区自动满足 n≈Nd (N侧) 和 p≈Na (P侧)，
+    // 耗尽区载流子浓度指数衰减，完全符合PN结物理。相比原程序消除了中性区强制赋值导致的不连续。
 </script>
 </body>
 </html>
