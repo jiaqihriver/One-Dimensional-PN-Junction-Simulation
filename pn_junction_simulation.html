@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>一维理想PN结稳态仿真 | 耗尽近似 & 准费米能级模型 (修正载流子分布)</title>
+    <title>一维理想PN结稳态仿真 | 耗尽近似 & 物理模型</title>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
         * {
@@ -173,7 +173,7 @@
 <body>
 <div class="header">
     <h1>⚡ 一维理想 PN 结稳态仿真 (修正模型)</h1>
-    <p>耗尽近似 | 准费米能级恒定模型 | 玻尔兹曼载流子统计 | 连续平滑分布</p>
+    <p>耗尽近似 | 玻尔兹曼载流子统计 | 连续平滑分布</p>
 </div>
 
 <div class="container">
@@ -232,7 +232,7 @@
             <strong>📊 稳态特性</strong><br>
             计算中...
         </div>
-        <div class="badge">✔ 理想突变结 | T = 300K | 硅材料 | 准费米能级恒定模型 (Efp=0, Efn=Va_eff)</div>
+        <div class="badge">✔ 理想突变结 | T = 300K | 硅材料 | 全局准费米能级模型 (Efp=0, Efn=Va_eff)</div>
     </div>
 
     <div class="charts">
@@ -392,8 +392,7 @@
             ▪ 耗尽区总宽度 W = ${W_um.toFixed(4)} μm<br>
             ▪ P区耗尽层宽 x<sub>p</sub> = ${xp_um.toFixed(4)} μm &nbsp;| N区耗尽层宽 x<sub>n</sub> = ${xn_um.toFixed(4)} μm<br>
             ▪ 最大电场 |E<sub>max</sub>| ≈ ${maxEField.toExponential(3)} V/cm<br>
-            ▪ 理想电流 I<sub>D</sub> = ${currentOp.toExponential(3)} A<br>
-            ▪ 准费米能级: E<sub>fp</sub> = 0 eV, E<sub>fn</sub> = ${Va_eff.toFixed(4)} eV
+            ▪ 理想电流 I<sub>D</sub> = ${currentOp.toExponential(3)} A
         `;
         
         // 公共图形设置 (垂直虚线标记耗尽区边界和冶金结)
@@ -413,15 +412,13 @@
             paper_bgcolor: '#ffffff'
         };
         
-        // 1. 能带图 (Ec, Ev, Ei, 准费米能级)
+        // 1. 能带图 (Ec, Ev, Ei) — 已移除准费米能级线条
         Plotly.react('plot_band', [
             { x: x_um, y: Ec_arr, name: '导带 E<sub>c</sub>', line: { color: '#1f77b4', width: 2.5 }, type: 'scatter' },
             { x: x_um, y: Ev_arr, name: '价带 E<sub>v</sub>', line: { color: '#d62728', width: 2.5 }, type: 'scatter' },
-            { x: x_um, y: Ei_arr, name: '本征能级 E<sub>i</sub>', line: { color: '#2ca02c', width: 1.8, dash: 'dot' }, type: 'scatter' },
-            { x: x_um, y: Array(x_um.length).fill(Efp), name: 'E<sub>fp</sub> (空穴准费米能级)', line: { color: '#000000', width: 1.8, dash: 'dash' }, type: 'scatter' },
-            { x: x_um, y: Array(x_um.length).fill(Efn), name: 'E<sub>fn</sub> (电子准费米能级)', line: { color: '#9467bd', width: 1.8, dash: 'dash' }, type: 'scatter' }
+            { x: x_um, y: Ei_arr, name: '本征能级 E<sub>i</sub>', line: { color: '#2ca02c', width: 1.8, dash: 'dot' }, type: 'scatter' }
         ], Object.assign({}, layout_base, { 
-            title: '📈 能带图 (Ec, Ev, Ei, 准费米能级) — 连续平滑', 
+            title: '📈 能带图 (Ec, Ev, Ei)', 
             yaxis: { title: '能量 (eV)' } 
         }), { responsive: true });
         
@@ -491,11 +488,6 @@
     
     // 初始仿真
     updateSimulation();
-    
-    // 补充说明：手动验证载流子分布修正后的自洽性
-    // 本模型采用全局恒定的准费米能级 (Efp, Efn)，结合耗尽近似下的静电势分布，
-    // 计算得到的n(x)和p(x)在全空间连续，且中性区自动满足 n≈Nd (N侧) 和 p≈Na (P侧)，
-    // 耗尽区载流子浓度指数衰减，完全符合PN结物理。相比原程序消除了中性区强制赋值导致的不连续。
 </script>
 </body>
 </html>
