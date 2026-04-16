@@ -23,7 +23,7 @@
 
 ## 使用方法
 
-1. 打开 `pn_junction_simulation.html` 文件（所有代码已整合在单个 HTML 中）。
+1. 打开 `pn_junction_simulator.html` 文件（所有代码已整合在单个 HTML 中）。
 2. 左侧控制面板调节参数：
    - **P 区掺杂浓度 \(N_a\)**：范围 \(10^{13} \sim 10^{18}\,\text{cm}^{-3}\)
    - **N 区掺杂浓度 \(N_d\)**：范围 \(10^{13} \sim 10^{18}\,\text{cm}^{-3}\)
@@ -39,7 +39,7 @@
 
 ## 文件说明
 
-- `pn_junction_simulation.html`：包含完整的仿真界面、样式、脚本和物理计算逻辑，无需额外依赖即可运行。
+- `pn_junction_simulator.html`：包含完整的仿真界面、样式、脚本和物理计算逻辑，无需额外依赖即可运行。
 
 ## 注意事项
 
